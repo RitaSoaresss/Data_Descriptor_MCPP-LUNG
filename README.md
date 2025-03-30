@@ -2,6 +2,8 @@
 
 Here is a brief description of the steps used in the RNA and DNA pre-processing:
 
+
+
 ## FASTQC
 The FastQ files provided from the whole sequencing, pass first through a quality control analysis using FASTQC tool
 
