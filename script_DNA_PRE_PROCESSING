@@ -6,317 +6,134 @@
 #SBATCH --cpus-per-task=40
 #SBATCH --chdir=/mnt/nfs/lobo/IMM-NFS/cfranco/scratch
 
-#Define the path for all directories
-path="/mnt/nfs/lobo/IMM-NFS/cfranco/MCPP-Lung/DNA/DNA_fastq"
+# ============ SETUP ============ #
+path="/mnt/nfs/lobo/IMM-NFS/cfranco/MCPP-Lung/DNA"
+fastq_dir="$path/DNA_fastq"
+fastqc_dir="$path/DNA_FASTQC"
+multiqc_dir="$path/DNA_MULTIQC"
+fastp_dir="$path/DNA_fastp"
+bwa_dir="$path/BWA"
+samtobam_dir="$path/samToBam"
+fastqtosam_dir="$path/FastqToSam"
+merged_bam_dir="$path/MergeBamAlignment"
+markdup_dir="$path/MarkDuplicates"
+sortedbam_dir="$path/sortedbam"
+bqsr_dir="$path/BaseRecalibrator_snps_indels"
+applybqsr_dir="$path/ApplyBQSR"
+tmp_dir="$path/TMP"
+untrimmed_dir="$path/untrimmed_fastq"
 
-# 1.Run Fastqc
-##Set directories
-process_dir="$path/DNA_fastq"
-process_dir2="$path/DNA_FASTQC"
-
-echo "START PROCESSING FASTQC"
-
-# Loop over all files ending with _R2_001.fastq.gz
-for R1 in "$process_dir2"/*_R1_001.fastq.gz; do
-    # Derive the corresponding R2 file by replacing R1 with R2
-    R2="${R1/_R1_001.fastq.gz/_R2_001.fastq.gz}"
-
-    # Extract the sample name (before __R1_001.fastq.gz)
-    sample_name=$(basename "$R1" _R1_001.fastq.gz)
-
-    echo "Processing sample: $sample_name"
-    echo "Running FastQC for $sample_name..."
-
-    # Run FastQC using Singularity
-    srun /mnt/beegfs/apptainer/images/biocontainers-fastqc-v0.11.9_cv8.img fastqc $R1 $R2 -o $process_dir3
-done
-
-echo "All DNA samples processed with FastQC."
-
-# 3. Run MULTIQC
-##Determine the directories
-process_dir2="$path/DNA_FASTQC"
-process_dir3="$path/DNA_MULTIQC"
-
- echo "START PROCESSING MULTIQC"
- srun /mnt/beegfs/apptainer/images/multiqc-1.20.sif multiqc $process_dir2 -o $process_dir3
-
-echo "All DNA samples processed with MULTIQC."
-echo "Start DNA Variant Alignment"
-
-# 4. Run Fastp
-##Set directeries
-process_dir=$path/DNA_fastq
-process_dir4="$path/DNA_fastp"
-
-    ##determine file prefix
-    s=${sample}
-
-    pf=$(echo ${s%_R1_001.*})
-    NAME1=$(echo ${pf}_R1_001.fastq.gz)
-    NAME2=$(echo ${pf}_R2_001.fastq.gz)
-
-    trimBASE=$pf*
-    echo "trimBASE is $trimBASE"
-
-
- echo "moving fastq to processing folder"
- echo "mv $trimBASE $process_dir2/"
- mv $trimBASE $process_dir2/ # move fastq files
-
- echo "Adapter and quality trimming with fastp"
-
-    ##determine file prefix
-    s2=${pf#*/mnt/nfs/lobo/SALMEIDA-NFS/lcosta/MCPP-Sarcoma/raw_data/New_Illumina_sent/Lung/}
-    echo "s2 is $s2"
-
-
-    pf2=$(echo ${s2%_R1_001.*})
-    BASE="$process_dir2/$pf2"
-    NAME1b=$(echo ${BASE}_R1_001.fastq.gz)
-    NAME2b=$(echo ${BASE}_R2_001.fastq.gz)
-    echo "BASE file name is $BASE"
-
-    R1="_R1"
-    R2="_R2"
-    STR5="$BASE$R1"
-    STR6="$BASE$R2"
-    echo "NAME1b IS $NAME1b"
-    echo "NAME2b IS $NAME2b"
-    echo "STR5 IS $STR5"
-    echo "STR6 IS $STR6"
-
- echo "Start processing $pf2"
- echo "Trimming reads..."
- echo "fastp -i $NAME1b -I $NAME2b -o $STR5.trimmed.fastq.gz -O $STR6.trimmed.fastq.gz"
- srun /mnt/beegfs/apptainer/images/fastp_0.19.5.sif fastp --thread 40 -i $NAME1b -I $NAME2b -o $STR5.trimmed.fastq.gz -O $STR6.trimmed.fastq.gz
-
- #echo "moving untrimmed fastq"
- #echo "mv $process_dir2/*_001.fastq.gz $path/untrimmed_fastq/"
- mv $process_dir2/*_001.fastq.gz $path/untrimmed_fastq/ 
-
-# 5. Run BWA
-##Set directories
-process_dir_4="$path/DNA_fastp"
-process_dir_5="$path/BWA"
-genome="/mnt/nfs/lobo/SALMEIDA-NFS/lcosta/MCPP-Lung/bwa_prefiles/GRCh38.primary_assembly.genome.fa"
-
-    ##determine file prefix
-    s=${sample}
-
-    pf=$(echo ${s%_R1.trimmed*})
-    NAME1=$(echo ${pf}_R1.trimmed.fastq.gz)
-    NAME2=$(echo ${pf}_R2.trimmed.fastq.gz)
-
-    s2=${pf#*$path/DNA_fastq}
-    echo "s2 is $s2"
-    echo "pf is $pf"
-    BASE="$process_dir4/$s2"
-
-    echo "BASE file name is $BASE"
-    echo "NAME1 IS $NAME1"
-    echo "NAME2 IS $NAME2"
-
- echo "Start processing $pf"
-
- echo "Aligning to the genome..."
- echo "bwa mem -t 40 $genome $NAME1 $NAME2 > $BASE.sam"
- srun /mnt/beegfs/apptainer/images/bwa_latest.sif bwa mem -t 40 $genome $NAME1 $NAME2 > $BASE.sam
-
-echo "All DNA samples processed with BWA."
-
-# 6. Run SamTools to transform bwa-produced .sam file to .bam format
-##Set directories
-process_dir_5="$path/BWA"
-process_dir_6="$path/samToBam"
-
-    ##determine file prefix
-    s=${sample}
-
-    pf=$(echo ${s%.sam*})
-    s2=${pf#*$path/BWA/}
-    echo "s2 is $s2"
-    echo "pf is $pf"
-    BASE="$process_dir5/$s2"
-
- echo "convert sam to bam"
- SAM="$pf.sam"
-
- echo "SAM is $SAM"
- echo "samtools view -S -b $SAM > "$BASE.unsorted.bam""
- srun /mnt/beegfs/apptainer/images/samtools_latest.sif samtools view -S -b $SAM > "$BASE.unsorted.bam"
-
-echo "Tranformation of bwa-produced .sam file to .bam format done."
-
-# 7. Run FastqToSam
-##Set directories
-process_dir_4="$path/DNA_fastp"
-process_dir_7="$path/FastqToSam"
-
-##determine file prefix
-    s=${sample}
-
-    pf=$(echo ${s%_R1.trimmed*})
-    NAME1=$(echo ${pf}_R1.trimmed.fastq.gz)
-    NAME2=$(echo ${pf}_R2.trimmed.fastq.gz)
-
-    s2=${pf#*$path/DNA_fastp/}
-    echo "s2 is $s2"
-    echo "pf is $pf"
-    BASE="$process_dir7"
-
-    echo "BASE file name is $BASE"
-    echo "NAME1 IS $NAME1"
-    echo "NAME2 IS $NAME2"
-
- echo "Start processing $pf"
- echo "FastqToSam (Picard) producing uBAM"
- uBAM="$BASE/10LC_tumor_S2.unmapped.bam"
-
- echo "uBAM will be $uBAM"
- echo "srun shifter java -XX:ParallelGCThreads=40 -jar /usr/picard/picard.jar FastqToSam F1=$NAME1 F2=$NAME2 O=$uBAM SM=$s2 TMP_DIR=/mnt/nfs/lobo/SALMEIDA-NFS/lcosta/MCPP-Lung/tmp/"
- srun /mnt/beegfs/apptainer/images/picard_latest.sif java -XX:ParallelGCThreads=40 -jar /usr/picard/picard.jar FastqToSam F1=$NAME1 F2=$NAME2 O=$uBAM SM=$s2 TMP_DIR=/mnt/nfs/lobo/SALMEIDA-NFS/lcosta/MCPP-Lun>
-
-echo "uBAM from FastqToSam done."
-
-# 8. Run MergeBamAlignment
-## Define the directories
-process_dir_7="$path/FastqToSam"
-process_dir_6="$path/samToBam"
-process_dir_8="$path/MergeBamAlignment"
-
-echo "Start merging for new sample: Merge unmapped bam and unsorted-aligned bam"
-genome="/mnt/nfs/lobo/SALMEIDA-NFS/lcosta/MCPP-Lung/bwa_prefiles/GRCh38.primary_assembly.genome.fa"
-
-    ##determine file prefix
-    s=${sample}
-    pf3=$(echo ${s%.unmapped.*})
-    echo "pf3 is $pf3"
-    NAME1=$s
-    BASE=${pf3#*$path/FastqToSam/}
-    NAME2=$process_dir_6/$BASE.unsorted.bam
-
-   echo "NAME1 is $NAME1"
-   echo "NAME2 is $NAME2"
-   echo "BASE is $BASE"
-
- echo "Start processing $NAME1 and $NAME2"
-
- echo "Getting merged bam..."
- echo "srun shifter java -XX:ParallelGCThreads=40 -jar /usr/picard/picard.jar MergeBamAlignment ALIGNED=$NAME2 UNMAPPED=$NAME1 O=$dir3/$BASE.merged.bam R=$genome SORT_ORDER=c>"
- srun /mnt/beegfs/apptainer/images/picard_latest.sif java -XX:ParallelGCThreads=40 -jar /usr/picard/picard.jar MergeBamAlignment ALIGNED=$NAME2 UNMAPPED=$NAME1 O=$dir3/$BASE.merged.bam R=$genome SORT_ORDER=c>
-
-# 9. Run Markduplicates
-## Define the directories
-process_dir_8="$path/MergeBamAlignment"
-process_dir_9="$path/MarkDuplicates"
-
-##determine file prefix
-    s=${sample}
-
-    pf=$(echo ${s%.bam*})
-    s2=${pf#*$path/MergeBamAlignment/}
-    echo "s2 is $s2"
-    echo "pf is $pf"
-    BASE="$process_dir_9/$s2"
-
- echo "Mark Duplicates in bam"
- READGROUPS="$pf.readgroups.bam"
- MARKED="$BASE.markeduplicates.bam"
- METRICS="$BASE.markduplicates.txt"
-
- echo "READGROUPS is $READGROUPS"
-
- echo "MarkDuplicates GATK"
- echo "Marked bam file will be $MARKED"
-
-
- echo "srun shifter gatk MarkDuplicatesSpark -I $READGROUPS -O $MARKED -M marked_dup_metrics.txt"
- srun /mnt/beegfs/apptainer/images/picard_latest.sif java -XX:ParallelGCThreads=40 -jar /usr/picard/picard.jar MarkDuplicates -I $READGROUPS -O $MARKED -M $METRICS
-
-echo " Markduplicates step done "
-
-# 10. Run SortSam
-process_dir_6="$path/samToBam"
-process_dir_10="$path/new_sortedbam"
-
-    ##determine file prefix
-    s=${sample}
-
-    pf=$(echo ${s%.unsorted.bam*})
-    s2=${pf#*$path/samToBam/}
-    echo "s2 is $s2"
-    echo "pf is $pf"
-    BASE="$process_dir_6/$s2"
-
- echo "sort bam"
- BAM="$pf.unsorted.bam"
- SORTED="$BASE.sorted.bam"
-
- echo "BAM is $BAM"
- echo "Sorted BAM will be $SORTED"
-
- echo "srun /mnt/beegfs/apptainer/images/gatk_latest.sif gatk SortSamSpark -I $BAM -O $SORTED --  --spark-runner LOCAL --spark-master 'local[*]' --tmp-dir /mnt/nfs/lobo/SALMEIDA-NFS/lcosta/MCPP-Lung/tmp/"
- srun /mnt/beegfs/apptainer/images/gatk_latest.sif gatk SortSamSpark -I $BAM -O $SORTED --  --spark-runner LOCAL --spark-master 'local[*]' --tmp-dir /mnt/nfs/lobo/SALMEIDA-NFS/lcosta/MCPP-Lung/tmp/
-
-# 11. Run BaseRecalibrator
-#Set directeries
-process_dir_9="$path/MarkDuplicates"
-process_dir_11="$path/BaseRecalibrator_snps_indels"
 genome="/mnt/nfs/lobo/SALMEIDA-NFS/lcosta/MCPP-Lung/bwa_prefiles/GRCh38.primary_assembly.genome.fa"
 known_sites="/mnt/nfs/lobo/SALMEIDA-NFS/lcosta/MCPP-Lung/gatk_files/Homo_sapiens_assembly38.dbsnp138.vcf"
 known_sites_indels="/mnt/nfs/lobo/SALMEIDA-NFS/lcosta/MCPP-Lung/gatk_files/Homo_sapiens_assembly38.known_indels.vcf.gz"
 
- ##determine file prefix
-    s=${sample}
+# ============ STEP 1: FASTQC ============ #
+echo "START FASTQC"
+mkdir -p "$fastqc_dir"
+for R1 in "$fastq_dir"/*_R1_001.fastq.gz; do
+    R2="${R1/_R1_001.fastq.gz/_R2_001.fastq.gz}"
+    sample_name=$(basename "$R1" _R1_001.fastq.gz)
+    echo "Running FastQC for $sample_name"
+    srun /mnt/beegfs/apptainer/images/biocontainers-fastqc-v0.11.9_cv8.img fastqc "$R1" "$R2" -o "$fastqc_dir"
+done
 
-    pf=$(echo ${s%.markeduplicates.sorted.bam*})
-    s2=${pf#*$path/MarkDuplicates/}
-    echo "s2 is $s2"
-    echo "pf is $pf"
-    BASE="$process_dir_11/$s2"
+# ============ STEP 2: MULTIQC ============ #
+echo "START MULTIQC"
+mkdir -p "$multiqc_dir"
+srun /mnt/beegfs/apptainer/images/multiqc-1.20.sif multiqc "$fastqc_dir" -o "$multiqc_dir"
 
- echo "Mark Duplicates BAM is $BAM"
- BAM="$pf.markeduplicates.sorted.bam"
+# ============ STEP 3: FASTP ============ #
+echo "START FASTP"
+mkdir -p "$fastp_dir" "$untrimmed_dir"
+for R1 in "$fastq_dir"/*_R1_001.fastq.gz; do
+    R2="${R1/_R1_001.fastq.gz/_R2_001.fastq.gz}"
+    sample=$(basename "$R1" _R1_001.fastq.gz)
+    trimmed_R1="$fastp_dir/${sample}_R1.trimmed.fastq.gz"
+    trimmed_R2="$fastp_dir/${sample}_R2.trimmed.fastq.gz"
+    echo "Trimming $sample"
+    srun /mnt/beegfs/apptainer/images/fastp_0.19.5.sif fastp --thread 40 -i "$R1" -I "$R2" -o "$trimmed_R1" -O "$trimmed_R2"
+    mv "$R1" "$R2" "$untrimmed_dir/"
+done
 
- echo "BaseRecalibrator OUTPUT will be $OUTPUT as SAMPLE.recal.table"
- OUTPUT="$BASE.recal.table"
+# ============ STEP 4: BWA ALIGNMENT ============ #
+echo "START BWA"
+mkdir -p "$bwa_dir"
+for trimmed_R1 in "$fastp_dir"/*_R1.trimmed.fastq.gz; do
+    trimmed_R2="${trimmed_R1/_R1.trimmed/_R2.trimmed}"
+    sample=$(basename "$trimmed_R1" _R1.trimmed.fastq.gz)
+    sam_out="$bwa_dir/${sample}.sam"
+    srun /mnt/beegfs/apptainer/images/bwa_latest.sif bwa mem -t 40 "$genome" "$trimmed_R1" "$trimmed_R2" > "$sam_out"
+done
 
- echo "srun /mnt/beegfs/apptainer/images/gatk_latest.sif  gatk BaseRecalibrator -I $BAM -R $genome_reference --known-sites $known_sites --known-sites $known_sites_indels -O $OUTPUT --TMP_DIR /mnt/nfs/lobo/IMM-NFS/cfranco/MCPP-Lung/DNA/TMP"
- srun /mnt/beegfs/apptainer/images/gatk_latest.sif  gatk BaseRecalibrator -I $BAM -R $genome_reference --known-sites $known_sites --known-sites $known_sites_indels -O $OUTPUT --tmp-dir /mnt/nfs/lobo/IMM-NFS/cfranco/MCPP-Lung/DNA/TMP
+# ============ STEP 5: SAMTOOLS CONVERT TO BAM ============ #
+echo "START SAMTOOLS"
+mkdir -p "$samtobam_dir"
+for sam_file in "$bwa_dir"/*.sam; do
+    sample=$(basename "$sam_file" .sam)
+    bam_out="$samtobam_dir/${sample}.unsorted.bam"
+    srun /mnt/beegfs/apptainer/images/samtools_latest.sif samtools view -S -b "$sam_file" > "$bam_out"
+done
 
-echo "BaseRecalibrator table created."
+# ============ STEP 6: FASTQ to uBAM ============ #
+echo "START FASTQtoSAM"
+mkdir -p "$fastqtosam_dir"
+for trimmed_R1 in "$fastp_dir"/*_R1.trimmed.fastq.gz; do
+    trimmed_R2="${trimmed_R1/_R1.trimmed/_R2.trimmed}"
+    sample=$(basename "$trimmed_R1" _R1.trimmed.fastq.gz)
+    ubam_out="$fastqtosam_dir/${sample}.unmapped.bam"
+    srun /mnt/beegfs/apptainer/images/picard_latest.sif java -XX:ParallelGCThreads=40 -jar /usr/picard/picard.jar FastqToSam F1="$trimmed_R1" F2="$trimmed_R2" O="$ubam_out" SM="$sample" TMP_DIR="$tmp_dir"
+done
 
-# 12. Run ApplyBQSR
-#Set directories
-process_dir_9="$path/MarkDuplicates"
-process_dir_11="$path/BaseRecalibrator_snps_indels"
-process_dir_12="$path/ApplyBQSR"
-genome="/mnt/nfs/lobo/SALMEIDA-NFS/lcosta/MCPP-Lung/bwa_prefiles/GRCh38.primary_assembly.genome.fa"
+# ============ STEP 7: MergeBamAlignment ============ #
+echo "START MergeBamAlignment"
+mkdir -p "$merged_bam_dir"
+for ubam in "$fastqtosam_dir"/*.unmapped.bam; do
+    sample=$(basename "$ubam" .unmapped.bam)
+    aligned_bam="$sam2bam_dir/${sample}.unsorted.bam"
+    merged_bam="$merged_bam_dir/${sample}.merged.bam"
+    srun /mnt/beegfs/apptainer/images/picard_latest.sif java -XX:ParallelGCThreads=40 -jar /usr/picard/picard.jar MergeBamAlignment ALIGNED="$aligned_bam" UNMAPPED="$ubam" O="$merged_bam" R="$genome" SORT_ORDER=coordinate TMP_DIR="$tmp_dir"
+done
 
- ##determine file prefix
-    s=${sample}
+# ============ STEP 8: MarkDuplicates ============ #
+echo "START MarkDuplicates"
+mkdir -p "$markdup_dir"
+for merged_bam in "$merged_bam_dir"/*.merged.bam; do
+    sample=$(basename "$merged_bam" .merged.bam)
+    marked_bam="$markdup_dir/${sample}.marked.bam"
+    metrics="$markdup_dir/${sample}.metrics.txt"
+    srun /mnt/beegfs/apptainer/images/picard_latest.sif java -XX:ParallelGCThreads=40 -jar /usr/picard/picard.jar MarkDuplicates I="$merged_bam" O="$marked_bam" M="$metrics"
+done
 
-    pf=$(echo ${s%.markeduplicates.sorted.bam*})
-    s2=${pf#*$path/SortSam_MarkDuplicates/}
-    echo "s2 is $s2"
-    echo "pf is $pf"
-    BASE="$process_dir2/$s2"
-    BASE_OUTPUT="$process_dir3/$s2"
+# ============ STEP 9: SortSam ============ #
+echo "START SortSam"
+mkdir -p "$sortedbam_dir"
+for marked_bam in "$markdup_dir"/*.marked.bam; do
+    sample=$(basename "$marked_bam" .marked.bam)
+    sorted_bam="$sortedbam_dir/${sample}.sorted.bam"
+    srun /mnt/beegfs/apptainer/images/gatk_latest.sif gatk SortSamSpark -I "$marked_bam" -O "$sorted_bam" --spark-runner LOCAL --spark-master 'local[*]' --tmp-dir "$tmp_dir"
+done
 
- echo "Mark Duplicates BAM is $BAM"
- BAM="$pf.markeduplicates.sorted.bam"
+# ============ STEP 10: BaseRecalibrator ============ #
+echo "START BaseRecalibrator"
+mkdir -p "$bqsr_dir"
+for sorted_bam in "$sortedbam_dir"/*.sorted.bam; do
+    sample=$(basename "$sorted_bam" .sorted.bam)
+    recal_table="$bqsr_dir/${sample}.recal.table"
+    srun /mnt/beegfs/apptainer/images/gatk_latest.sif gatk BaseRecalibrator -I "$sorted_bam" -R "$genome" --known-sites "$known_sites" --known-sites "$known_sites_indels" -O "$recal_table" --tmp-dir "$tmp_dir"
+done
 
- echo "recal.table from the BaseRecalibrator is $bqsr_recal_file"
- bqsr_recal_file="$BASE.recal.table"
+# ============ STEP 11: ApplyBQSR ============ #
+echo "START ApplyBQSR"
+mkdir -p "$applybqsr_dir"
+for sorted_bam in "$sortedbam_dir"/*.sorted.bam; do
+    sample=$(basename "$sorted_bam" .sorted.bam)
+    bqsr_out="$applybqsr_dir/${sample}.bqsr.bam"
+    recal_table="$bqsr_dir/${sample}.recal.table"
+    srun /mnt/beegfs/apptainer/images/gatk_latest.sif gatk ApplyBQSR -R "$genome" -I "$sorted_bam" --bqsr-recal-file "$recal_table" -O "$bqsr_out" --tmp-dir "$tmp_dir"
+done
 
- echo "ApplyBQSR OUTPUT will be $OUTPUT as SAMPLE_bqsr.bam"
- OUTPUT="$BASE_OUTPUT.bqsr.bam"
+# ============ FINAL REPORT ============ #
+echo "All steps completed."
 
- echo "srun /mnt/beegfs/apptainer/images/gatk_latest.sif gatk ApplyBQSR -R $genome_reference -I $BAM --bqsr-recal-file $bqsr_recal_file -O $OUTPUT --tmp-dir /mnt/nfs/lobo/IMM-NFS/cfranco/MCPP-Lung/DNA/TMP"
- srun /mnt/beegfs/apptainer/images/gatk_latest.sif gatk ApplyBQSR -R $genome_reference -I $BAM --bqsr-recal-file $bqsr_recal_file -O $OUTPUT --tmp-dir /mnt/nfs/lobo/IMM-NFS/cfranco/MCPP-Lung/DNA/TMP
-
-echo "BAM files from ApplyBQSR to be analyzed"
-
-# Job statistics (like elapsed time and memory usage)
-sacct --format="JOBID,Start,End,Elapsed,CPUTime,AveDiskRead,AveDiskWrite,MaxRSS" -j $SLURM_JOB_ID
+# Optional job stats:
+sacct --format="JobID,Start,End,Elapsed,CPUTime,AveDiskRead,AveDiskWrite,MaxRSS" -j $SLURM_JOB_ID
