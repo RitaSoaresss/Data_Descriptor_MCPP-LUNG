@@ -89,7 +89,7 @@ echo "START MergeBamAlignment"
 mkdir -p "$merged_bam_dir"
 for ubam in "$fastqtosam_dir"/*.unmapped.bam; do
     sample=$(basename "$ubam" .unmapped.bam)
-    aligned_bam="$sam2bam_dir/${sample}.unsorted.bam"
+    aligned_bam="$samtobam_dir/${sample}.unsorted.bam"
     merged_bam="$merged_bam_dir/${sample}.merged.bam"
     srun /mnt/beegfs/apptainer/images/picard_latest.sif java -XX:ParallelGCThreads=40 -jar /usr/picard/picard.jar MergeBamAlignment ALIGNED="$aligned_bam" UNMAPPED="$ubam" O="$merged_bam" R="$genome" SORT_ORDER=coordinate TMP_DIR="$tmp_dir"
 done
