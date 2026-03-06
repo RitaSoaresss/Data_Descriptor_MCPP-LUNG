@@ -1,6 +1,6 @@
 # RNA & DNA PRE-PROCESSING
 
-![PIPELINE_PAPER](https://github.com/user-attachments/assets/2baee38e-da43-4433-bc3f-5186013a2ee4)
+![Experimental design overview](https://github.com/user-attachments/assets/9e9562cb-2745-456f-afb7-28829d66d449)
 
 1. Here is a brief description of the steps used in the RNA and DNA samples quality check:
 
